@@ -3,7 +3,9 @@ package com.example.stan.movingaverage;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.view.SurfaceView;
+import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -14,6 +16,7 @@ import com.affectiva.android.affdex.sdk.detector.Face;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.stream.*;
 
@@ -22,13 +25,14 @@ import static android.R.id.list;
 
 public class MainActivity extends AppCompatActivity implements CameraDetector.CameraEventListener, CameraDetector.ImageListener{
     SurfaceView cameraDetectorSurfaceView;
-    private LinearLayout my_points;
     private CameraDetector cameraDetector;
     private TextView textViewCongrats;
+    private Button byTime;
     private int maxProcessingRate = 10;
     private final float threshold = 60;
     private final int numberOfPoint = 15;
-    private boolean isFull = false;
+    private boolean ifByTime = false;
+    private float preTime = 0;
     private List<Float> pointsList = new ArrayList<>();
 
 
@@ -38,7 +42,21 @@ public class MainActivity extends AppCompatActivity implements CameraDetector.Ca
         setContentView(R.layout.activity_main);
 
         textViewCongrats = (TextView) findViewById(R.id.textViewCongrats);
-//        textViewMean = (TextView) findViewById(R.id.textViewMean);
+        byTime = (Button)findViewById(R.id.byTime);
+        byTime.setText("By Number");
+        byTime.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if(!ifByTime){
+                    ifByTime = true;
+                    byTime.setText("By Time");
+                } else {
+                    ifByTime = false;
+                    byTime.setText("By Number");
+                }
+
+            }
+        });
 
         cameraDetectorSurfaceView=(SurfaceView)findViewById(R.id.cameraDetectorSurfaceView);
         cameraDetector = new CameraDetector(this,CameraDetector.CameraType.CAMERA_FRONT,cameraDetectorSurfaceView);
@@ -68,9 +86,9 @@ public class MainActivity extends AppCompatActivity implements CameraDetector.Ca
     @Override
     public void onImageResults(List<Face> faces, Frame frame, float timeStamp) {
 
-        float mean;
-        float sum = 0;
+        float mean = 0;
         String text = "You have reached high-level joy";
+
         // check if the frame was processed.
         if(faces == null)
             return;//frame was not processed.
@@ -79,27 +97,60 @@ public class MainActivity extends AppCompatActivity implements CameraDetector.Ca
         if (faces.size() == 0) {
             return;
         }
+
         Face face = faces.get(0);
         float joy = face.emotions.getJoy();
 
-        pointsList.add(joy);
+        // calculate mean of last 15 seconds.
+        if(ifByTime){
+            if(timeStamp - preTime <= 15) {
+                pointsList.add(joy);
+                mean = getMeanByTime(pointsList);
+            } else {
+                preTime = timeStamp;
+            }
+        } else {
+            // calculate mean of last 15 points.
+            pointsList.add(joy);
+            mean = getMeanByNumber(pointsList);
+        }
 
+        if(mean > threshold) {
+            textViewCongrats.setText(text);
+            System.out.println(text);
+        } else {
+            textViewCongrats.setText(null);
+        }
+        // remove the first point to make sure there are last 15 points.
         if(pointsList.size() == numberOfPoint){
-            for(Object i : pointsList){
+            pointsList.remove(0);
+        }
+        System.out.println("Joy: " + joy);
+        System.out.println("time: " + timeStamp);
+    }
+
+    public float getMeanByNumber(List l){
+        float mean = 0;
+        float sum = 0;
+        if(l.size() == numberOfPoint){
+            for(Object i : l){
                 sum += (float)i;
             }
             mean = sum/numberOfPoint;
-            if(mean > threshold) {
-                textViewCongrats.setText(text);
-                System.out.println(text);
-            } else {
-                textViewCongrats.setText("");
-            }
-            pointsList.remove(0);
         }
+        return mean;
 
-        System.out.println("Joy: " + joy);
+    }
 
+    public float getMeanByTime(List l){
+        float mean;
+        float sum = 0;
+
+        for(Object i : l){
+            sum += (float)i;
+        }
+        mean = sum/l.size();
+        return mean;
     }
 
 }
